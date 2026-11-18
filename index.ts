@@ -1,10 +1,7 @@
 /*
- * FakeBadges - local-only profile badges for your own Discord client.
- * v14.2: Limits hide-originals DOM filtering to the current user profile only.
- * v14.1: Filters native badges before Discord calculates the profile overflow count.
- * v12: Adds a local detail view when clicking an experimental badge preview.
- * Uses Discord CDN SVG artwork for all four experimental badge tiers.
- * Customize Badges shows only enabled fake badges; replaced native badges are hidden locally.
+ * FakeBadges
+ * Local profile badge previews for Vencord.
+ *
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 import { addProfileBadge, BadgePosition, type ProfileBadge, removeProfileBadge } from "@api/Badges";
@@ -54,8 +51,7 @@ const levelLabels = {
     streamingTime: ["Newcomer — 1 h", "Fledgling — 5 h", "Breakout — 20 h", "Standout — 75 h", "Trendsetter — 150 h", "Headliner — 300 h", "Star — 500 h", "Sensation — 1.000 h", "Visionary — 2.000 h", "Phenomenon — 5.000+ h"]
 } as const;
 
-// Official Discord CDN artwork transcribed from the four native detail panels.
-// The selected tier now uses Discord's original SVG instead of third-party PNGs.
+// Discord artwork used for the experimental badge tiers.
 const experimentalBadgeArtwork: Record<ExperimentalBadgeKey, Record<string, string>> = {
     accountAge: {
         seed: "465f6cc202c60d0e250f986fa035ed461e275adddbf875106089527a2c16ef2c",
@@ -121,8 +117,7 @@ const experimentalBadges: Record<ExperimentalBadgeKey, { name: string; image: (l
     streamingTime: { name: "Streaming", image: level => `https://cdn.discordapp.com/assets/content/${experimentalBadgeArtwork.streamingTime[level] ?? experimentalBadgeArtwork.streamingTime.newcomer}.svg` }
 };
 
-// Build the Customize Badges previews only from badges currently enabled
-// in FakeBadges. Experimental badges use the selected level image.
+// Build previews for enabled badges using the selected experimental tier.
 function getActiveFakeBadgeCatalog() {
     if (!settings.store.badgesEnabled) return [];
 
@@ -192,9 +187,7 @@ const settings = definePluginSettings({
 let currentUserId: string | undefined;
 let badgeObserver: MutationObserver | undefined;
 
-// Filter native badges BEFORE BadgeAPI calculates Discord's six-icon limit
-// and +N overflow count. The DOM hiding below remains unchanged and continues
-// to handle the visible profile row and the separate badge panels.
+// Filter native badges before Discord calculates the profile badge limit.
 function getNativeBadgeText(badge: unknown): string {
     if (!badge || typeof badge !== "object") return String(badge ?? "");
 
@@ -248,9 +241,7 @@ function filterNativeProfileBadges<T>(nativeBadges: T[], targetUserId?: string):
     });
 }
 
-// Discord calculates the six-icon limit and +N count in UserProfileBadgeListRows
-// after collecting native badges. Expose this filter for the targeted patch
-// below so the native array is cleaned before that calculation takes place.
+// Expose the filter so native badges are removed before the profile limit is applied.
 function installBadgeArrayFilter() {
     (globalThis as any).__fakeBadgesFilterNative = filterNativeProfileBadges;
 }
@@ -277,9 +268,7 @@ type DirectoryBadgeSnapshot = {
 };
 const directoryBadgeSnapshots = new Map<HTMLElement, DirectoryBadgeSnapshot>();
 
-// The profile popout's "Customize your badges" panel is a different React
-// surface from the badge directory. Its native tiles use these exact CDN
-// assets (confirmed from the user's Vencord/Discord DOM).
+// The profile popout has a separate Customize Badges panel with its own badge tiles.
 const customizeOriginalBadgeImages: Record<ExperimentalBadgeKey, string> = {
     gameVariety: "https://cdn.discordapp.com/assets/content/fcc34d343451505c642f3397cec2669a2de3a4a410fb968f794b3a1a0dcd1728.svg",
     gameTime: "https://cdn.discordapp.com/assets/content/2bddcbc9f9959dab805eb7196c8112ce9dc68b09766c8193ab499b1870e44ac7.svg",
@@ -367,10 +356,7 @@ function restoreOriginalBadge(anchor: HTMLAnchorElement) {
     hiddenOriginalBadges.delete(anchor);
 }
 
-// Resolve the user ID from the React tree surrounding a profile element.
-// The profile row can exist for many users at once (for example, an open
-// popout while browsing a server), so DOM badge hiding must be scoped to the
-// signed-in user's own profile. If Discord does not expose an ID, fail closed.
+// Resolve the profile owner so badge changes only affect the signed-in user's profile.
 function getReactTreeUserId(element: HTMLElement): string | undefined {
     const readUserId = (props: any): string | undefined => {
         if (!props || typeof props !== "object") return undefined;
@@ -629,10 +615,7 @@ function syncCustomizeBadgesPanel() {
 }
 
 
-// Experimental badge details are rendered locally. Discord does not expose a
-// public API for opening its internal detail panel for a client-only badge, so
-// this lightweight panel mirrors its information hierarchy without changing
-// Discord's React state or native badge records.
+// Render experimental badge details locally without changing Discord's badge data.
 const experimentalDetailData: Record<ExperimentalBadgeKey, { description: string; milestones: string[] }> = {
     accountAge: {
         description: "Keep an active Discord account to level up this badge. Time will do the rest.",
@@ -829,8 +812,7 @@ function uninstallOriginalBadgeFilter() {
     document.querySelectorAll('[data-fakebadges-local-only="true"]').forEach(node => node.remove());
 }
 
-// Remove every badge previously registered by this plugin before rebuilding
-// the list. This is required when a switch or level selector changes.
+// Clear the current badges before rebuilding the list.
 function clearBadges() {
     for (const badge of equippedBadges.values()) {
         removeProfileBadge(badge);
